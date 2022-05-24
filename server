@@ -1,0 +1,57 @@
+#!/bin/bash
+
+Monpool="/root/Monpool" # Chemin vers le fichier du pool DHCP
+
+
+while read line # Lecture de la saisie au clavier
+do
+  if [ "$line" == "FIN" ] # Si "FIN" est entré au clavier le serveur s'arrête
+   then echo "Arrêt du serveur" # Affichage
+        echo "Arrêt du serveur" 1>&2 # Affichage côté serveur
+        exit 1 # Indique que la commande met fin au programme normalement
+  elif [ ${#line} -eq 17 ] # Si la saisie correspond au nombre de caractère d'une adresse mac
+   then echo $line > macrequest.txt # Enregistre l'adresse mac dans un fichier
+        macguest="$(</root/macrequest.txt)" # Nomme une variable qui est le contenu du fichier
+        if [[ ! `cat $Monpool | grep "$macguest"` ]]
+           then echo -e "\nSaisir 'request' pour demander une adresse ip ou 'FIN' pour annuler et quitter"
+        else
+            echo -e "\nVotre adresse Mac est déjà enregistrée, saisir 'FIN' pour quitter"
+        fi
+  elif [ "$line" == "request" ] # Si "request" est entré au clavier le serveur propose une adresse libre du pool
+   then echo "DHCP request from $macguest" 1>&2
+        echo -e "\nAdresse disponible : " # Affichage
+        echo -e "\nAdresse proposée : " 1>&2 #Affichage serveur
+        while IFS= read -r line # Les lignes du fichiers sont lues avec la prise en charge de séparateur grâce a IFS
+          do
+            if [[ "$line" == *"libre"* ]] # Si dans une ligne il y a "libre" alors le serveur affiche la 1ère @ip libre
+              then  echo $line | cut -d ';' -f1 # cut pour extraire ";" est le delimiteur et "-f1" pour le 1er champ @ip
+                    echo $line | cut -d ';' -f2  # "-f2" pour le 2nd champ donc le masque
+                    echo $line | cut -d ';' -f1 1>&2 # "1>&2" pour afficher sur l'écran du serveur
+                    echo $line | cut -d ';' -f2 1>&2
+                    break # Arrêt de la boucle
+            fi
+            if [[ ! `cat $Monpool | grep "libre"` ]] # Si dans $Monpool il n'y a pas "libre" alors il n'y a plus d'addr dispo
+              then echo "Aucune adresses disponibles"
+		   echo "Aucune adresses disponibles" 1>&2 # Renvoi vers la sortie ecran du serveur
+                   break
+            fi
+          done < "$Monpool" # Renvoi vers le fichier pool
+          echo -e "\nOK pour confirmer"
+  elif [ "$line" == "OK" ] # Sinon si "OK" est entré au clavier alors l'adresse est accepté par le client
+   then echo -e "\nAccusé réception envoyé"
+        sleep 2
+        echo -e "\nAccusé de réception reçu" 1>&2
+        sleep 1
+        echo -e "\nAttribution de l'adresse ip effectuée"
+        echo "Saisir FIN pour quitter"
+        while IFS= read -r line
+          do
+            if [[ "$line" == *"empty"* ]] # Si dans la ligne il y'a "libre" alors
+              then `sed -i "0,/empty/s//$macguest/" $Monpool` # Remplacement de "empty" par "l'adresse Mac" dans le pool
+                   `sed -i.bak "0,/libre/s//non disponible/" $Monpool` # Remplacement de "libre" en "non disponible" dans le pool
+                    break
+            fi
+          done < "$Monpool"
+  else echo "Saisie incorrecte, se référer au guide ci-dessus" # Gestion en cas de mauvaise saisie
+  fi
+done

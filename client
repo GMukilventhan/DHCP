@@ -1,0 +1,6 @@
+#!/bin/bash
+
+ADDRESS=$1
+ip a | grep "ether" | cut -b 16-32 #Affiche l'adresse mac du client à son écran
+echo "Saisir l'adresse Mac ci-dessus : "
+nc $ADDRESS 1000
